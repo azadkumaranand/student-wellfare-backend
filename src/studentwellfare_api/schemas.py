@@ -28,7 +28,8 @@ class AuthLogoutRequest(BaseModel):
 
 
 class ParentPinVerifyRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None
+    student_id: str | None = None
     pin: str = Field(min_length=4, max_length=12)
 
 

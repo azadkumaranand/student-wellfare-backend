@@ -55,8 +55,17 @@ def verify_parent_pin_endpoint(
     payload: ParentPinVerifyRequest,
     db: Session = Depends(get_db),
 ) -> ParentPinVerifyResponse:
-    user = db.get(User, payload.user_id)
+    from studentwellfare_api.models import Student
+    
+    user = None
+    if payload.user_id:
+        user = db.get(User, payload.user_id)
+    elif payload.student_id:
+        student = db.get(Student, payload.student_id)
+        if student:
+            user = student.parent
+            
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-
+    
     return ParentPinVerifyResponse(valid=verify_parent_pin(payload.pin, user.parent_pin_hash))

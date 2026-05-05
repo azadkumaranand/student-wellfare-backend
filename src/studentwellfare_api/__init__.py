@@ -1,0 +1,1 @@
+"""Studentwellfare backend package."""

@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: studentwellfare-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: PYTHONPATH=src uvicorn studentwellfare_api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:////opt/render/project/src/data/studentwellfare.db
+      - key: APP_NAME
+        value: Studentwellfare API
+      - key: SEED_PARENT_EMAIL
+        value: parent@example.com
+      - key: SEED_PARENT_PASSWORD
+        value: parent123
+    disk:
+      name: studentwellfare-data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1

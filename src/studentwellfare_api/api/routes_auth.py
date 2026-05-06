@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import uuid
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,6 +14,7 @@ from studentwellfare_api.schemas import (
     AuthLoginRequest,
     AuthLoginResponse,
     AuthRefreshRequest,
+    AuthRegisterRequest,
     ParentPinUpdateRequest,
     ParentPinUpdateResponse,
     ParentPinVerifyRequest,
@@ -18,6 +22,7 @@ from studentwellfare_api.schemas import (
 )
 from studentwellfare_api.services import (
     hash_parent_pin,
+    hash_password,
     issue_user_session,
     refresh_user_session,
     revoke_user_session,
@@ -27,6 +32,34 @@ from studentwellfare_api.services import (
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/register", response_model=AuthLoginResponse, status_code=status.HTTP_201_CREATED)
+def register(payload: AuthRegisterRequest, db: Session = Depends(get_db)) -> AuthLoginResponse:
+    email = payload.email.strip().lower()
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enter a valid email.")
+
+    existing = db.scalar(select(User).where(User.email == email))
+    if existing is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists.",
+        )
+
+    user = User(
+        id=f"usr_{uuid.uuid4().hex[:12]}",
+        name=payload.name.strip(),
+        email=email,
+        password_hash=hash_password(payload.password),
+        parent_pin_hash=None,
+        role="parent",
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return issue_user_session(db, user=user)
 
 
 @router.post("/login", response_model=AuthLoginResponse)

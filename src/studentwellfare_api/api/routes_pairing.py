@@ -60,10 +60,20 @@ def verify_pairing_code(
     db: Session = Depends(get_db),
 ) -> PairingVerifyResponse:
     pairing = db.get(PairingCode, payload.pairing_code.strip().upper())
-    if pairing is None or not pairing.is_active or pairing.expires_at < now_utc():
+    if pairing is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Pairing code is invalid or expired.",
+            detail="Pairing code is invalid. Please request a new one from your parent or admin.",
+        )
+    if not pairing.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This pairing code has already been used. Please ask your parent or admin for a new one.",
+        )
+    if pairing.expires_at < now_utc():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pairing code has expired. Please request a new one from your parent or admin.",
         )
 
     student = db.get(Student, pairing.student_id)
@@ -82,6 +92,7 @@ def verify_pairing_code(
         created_at=now_utc(),
     )
     db.add(device)
+    pairing.is_active = False
     db.commit()
     db.refresh(device)
 

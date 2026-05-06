@@ -231,9 +231,18 @@ def get_student_dashboard(db: Session, student: Student) -> StudentDashboardResp
         .limit(1)
     )
 
-    app_rules = db.scalars(
-        select(AppRule).where(AppRule.student_id == student.id).order_by(AppRule.app_name.asc())
+    app_rules_raw = db.scalars(
+        select(AppRule)
+        .where(AppRule.student_id == student.id)
+        .order_by(AppRule.app_name.asc(), desc(AppRule.updated_at))
     ).all()
+    seen_packages: set[str] = set()
+    app_rules = []
+    for rule in app_rules_raw:
+        if rule.package_name in seen_packages:
+            continue
+        seen_packages.add(rule.package_name)
+        app_rules.append(rule)
 
     social_usage = []
     usage_today = get_usage_summary_by_package(db, student_id=student.id)
@@ -474,6 +483,9 @@ def check_heartbeat_missing(db: Session, *, student: Student) -> None:
 def replace_app_rules(db: Session, *, student_id: str, rules: list[AppRuleUpsert]) -> list[AppRule]:
     db.query(AppRule).filter(AppRule.student_id == student_id).delete()
     created_at = now_utc()
+    seen: dict[str, AppRuleUpsert] = {}
+    for rule in rules:
+        seen[rule.package_name] = rule  # last write wins on duplicates
     records = [
         AppRule(
             student_id=student_id,
@@ -484,7 +496,7 @@ def replace_app_rules(db: Session, *, student_id: str, rules: list[AppRuleUpsert
             created_at=created_at,
             updated_at=created_at,
         )
-        for rule in rules
+        for rule in seen.values()
     ]
     db.add_all(records)
     db.commit()

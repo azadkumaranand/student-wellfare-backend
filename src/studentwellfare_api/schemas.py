@@ -27,6 +27,12 @@ class AuthLogoutRequest(BaseModel):
     refresh_token: str
 
 
+class AuthRegisterRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=6, max_length=128)
+
+
 class ParentPinVerifyRequest(BaseModel):
     user_id: str | None = None
     student_id: str | None = None

@@ -11,16 +11,20 @@ from studentwellfare_api.schemas import (
     AuthLoginRequest,
     AuthLoginResponse,
     AuthRefreshRequest,
+    ParentPinUpdateRequest,
+    ParentPinUpdateResponse,
     ParentPinVerifyRequest,
     ParentPinVerifyResponse,
 )
 from studentwellfare_api.services import (
+    hash_parent_pin,
     issue_user_session,
     refresh_user_session,
     revoke_user_session,
     verify_parent_pin,
     verify_password,
 )
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -69,3 +73,23 @@ def verify_parent_pin_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
     
     return ParentPinVerifyResponse(valid=verify_parent_pin(payload.pin, user.parent_pin_hash))
+
+
+@router.post("/set-parent-pin", response_model=ParentPinUpdateResponse)
+def set_parent_pin_endpoint(
+    payload: ParentPinUpdateRequest,
+    db: Session = Depends(get_db),
+) -> ParentPinUpdateResponse:
+    user = db.get(User, payload.user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    if not payload.new_pin.isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="PIN must contain only digits.",
+        )
+
+    user.parent_pin_hash = hash_parent_pin(payload.new_pin)
+    db.commit()
+    return ParentPinUpdateResponse(ok=True)

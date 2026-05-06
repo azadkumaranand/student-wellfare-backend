@@ -37,6 +37,16 @@ class ParentPinVerifyResponse(BaseModel):
     valid: bool
 
 
+class ParentPinUpdateRequest(BaseModel):
+    user_id: str
+    current_pin: str | None = None
+    new_pin: str = Field(min_length=4, max_length=12)
+
+
+class ParentPinUpdateResponse(BaseModel):
+    ok: bool
+
+
 class PairingCodeCreateRequest(BaseModel):
     student_id: str
     expires_in_minutes: int = Field(default=30, ge=5, le=1440)

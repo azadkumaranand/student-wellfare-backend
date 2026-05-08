@@ -246,13 +246,8 @@ def get_student_dashboard(db: Session, student: Student) -> StudentDashboardResp
 
     social_usage = []
     usage_today = get_usage_summary_by_package(db, student_id=student.id)
-    seed_usage_minutes = {
-        "com.instagram.android": 12,
-        "com.google.android.youtube": 18,
-        "com.facebook.katana": 0,
-    }
     for rule in app_rules:
-        used_minutes = usage_today.get(rule.package_name, seed_usage_minutes.get(rule.package_name, 0))
+        used_minutes = usage_today.get(rule.package_name, 0)
         remaining_minutes = max(rule.daily_limit_minutes - used_minutes, 0)
         social_usage.append(
             DashboardUsageCard(

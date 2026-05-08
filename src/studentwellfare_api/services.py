@@ -21,6 +21,7 @@ from studentwellfare_api.models import (
     Device,
     DeviceHeartbeat,
     ExtraTimeRequest,
+    InstallRequest,
     PairingCode,
     Student,
     UsageLog,
@@ -619,6 +620,73 @@ def review_extra_time_request(
             f"Parent approved {request_record.requested_minutes} extra minutes for {request_record.package_name}."
             if status == "approved"
             else f"Parent rejected extra time for {request_record.package_name}."
+        ),
+        metadata_json={
+            "requestId": request_record.id,
+            "approvedBy": approved_by,
+            "status": status,
+        },
+    )
+
+    return request_record
+
+
+def create_install_request(
+    db: Session,
+    *,
+    student_id: str,
+    device_id: str | None,
+    package_name: str,
+    app_name: str,
+    reason: str,
+) -> InstallRequest:
+    request_record = InstallRequest(
+        student_id=student_id,
+        device_id=device_id,
+        package_name=package_name,
+        app_name=app_name,
+        reason=reason,
+        status="pending",
+        approved_by=None,
+        created_at=now_utc(),
+    )
+    db.add(request_record)
+    db.commit()
+    db.refresh(request_record)
+    create_alert(
+        db,
+        student_id=student_id,
+        device_id=device_id,
+        event_type="INSTALL_REQUESTED",
+        severity="MEDIUM",
+        message=f"Student requested to install {app_name}.",
+        metadata_json={"requestId": request_record.id, "reason": reason, "appName": app_name},
+    )
+    return request_record
+
+
+def review_install_request(
+    db: Session,
+    *,
+    request_record: InstallRequest,
+    approved_by: str,
+    status: str,
+) -> InstallRequest:
+    request_record.status = status
+    request_record.approved_by = approved_by
+    db.commit()
+    db.refresh(request_record)
+
+    create_alert(
+        db,
+        student_id=request_record.student_id,
+        device_id=request_record.device_id,
+        event_type="INSTALL_APPROVED" if status == "approved" else "INSTALL_REJECTED",
+        severity="LOW" if status == "approved" else "MEDIUM",
+        message=(
+            f"Parent approved installation of {request_record.app_name}."
+            if status == "approved"
+            else f"Parent rejected installation of {request_record.app_name}."
         ),
         metadata_json={
             "requestId": request_record.id,

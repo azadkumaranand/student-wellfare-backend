@@ -206,6 +206,32 @@ class ExtraTimeRequestResponse(BaseModel):
     created_at: datetime
 
 
+class InstallRequestCreate(BaseModel):
+    device_id: str | None = None
+    package_name: str
+    app_name: str
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class InstallRequestReview(BaseModel):
+    approved_by: str
+    status: str = Field(pattern="^(approved|rejected)$")
+
+
+class InstallRequestResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    student_id: str
+    device_id: str | None
+    package_name: str
+    app_name: str
+    reason: str
+    status: str
+    approved_by: str | None
+    created_at: datetime
+
+
 class StudentSummary(BaseModel):
     id: str
     name: str

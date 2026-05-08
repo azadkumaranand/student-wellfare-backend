@@ -39,6 +39,7 @@ class Student(Base):
     website_rules: Mapped[list["WebsiteRule"]] = relationship(back_populates="student")
     alerts: Mapped[list["Alert"]] = relationship(back_populates="student")
     extra_time_requests: Mapped[list["ExtraTimeRequest"]] = relationship(back_populates="student")
+    install_requests: Mapped[list["InstallRequest"]] = relationship(back_populates="student")
     usage_logs: Mapped[list["UsageLog"]] = relationship(back_populates="student")
     pairing_codes: Mapped[list["PairingCode"]] = relationship(back_populates="student")
 
@@ -133,6 +134,22 @@ class ExtraTimeRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     student: Mapped[Student] = relationship(back_populates="extra_time_requests")
+
+
+class InstallRequest(Base):
+    __tablename__ = "install_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    student_id: Mapped[str] = mapped_column(ForeignKey("students.id"), nullable=False)
+    device_id: Mapped[str | None] = mapped_column(ForeignKey("devices.id"))
+    package_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    app_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    approved_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    student: Mapped[Student] = relationship(back_populates="install_requests")
 
 
 class UsageLog(Base):

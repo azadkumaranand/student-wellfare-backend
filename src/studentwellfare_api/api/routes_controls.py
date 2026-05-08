@@ -5,21 +5,26 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from studentwellfare_api.database import get_db
-from studentwellfare_api.models import AppRule, ExtraTimeRequest, Student, User, WebsiteRule
+from studentwellfare_api.models import AppRule, ExtraTimeRequest, InstallRequest, Student, User, WebsiteRule
 from studentwellfare_api.schemas import (
     AppRuleResponse,
     AppRuleUpsert,
     ExtraTimeRequestCreate,
     ExtraTimeRequestResponse,
     ExtraTimeRequestReview,
+    InstallRequestCreate,
+    InstallRequestResponse,
+    InstallRequestReview,
     WebsiteRuleResponse,
     WebsiteRuleUpsert,
 )
 from studentwellfare_api.services import (
     create_extra_time_request,
+    create_install_request,
     replace_app_rules,
     replace_website_rules,
     review_extra_time_request,
+    review_install_request,
     update_app_rule_record,
     update_website_rule_record,
 )
@@ -193,4 +198,60 @@ def reject_extra_time_request(
         request_id=request_id,
         payload=ExtraTimeRequestReview(approved_by=approved_by, status="rejected"),
         db=db,
+    )
+
+
+@router.get("/students/{student_id}/install-requests", response_model=list[InstallRequestResponse])
+def list_install_requests(student_id: str, db: Session = Depends(get_db)) -> list[InstallRequest]:
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
+
+    return db.scalars(
+        select(InstallRequest)
+        .where(InstallRequest.student_id == student_id)
+        .order_by(desc(InstallRequest.created_at))
+        .limit(50)
+    ).all()
+
+
+@router.post("/students/{student_id}/install-requests", response_model=InstallRequestResponse, status_code=status.HTTP_201_CREATED)
+def create_install_request_endpoint(
+    student_id: str,
+    payload: InstallRequestCreate,
+    db: Session = Depends(get_db),
+) -> InstallRequest:
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
+
+    return create_install_request(
+        db,
+        student_id=student_id,
+        device_id=payload.device_id,
+        package_name=payload.package_name,
+        app_name=payload.app_name,
+        reason=payload.reason,
+    )
+
+
+@router.patch("/install-requests/{request_id}", response_model=InstallRequestResponse)
+def review_install_request_endpoint(
+    request_id: int,
+    payload: InstallRequestReview,
+    db: Session = Depends(get_db),
+) -> InstallRequest:
+    request_record = db.get(InstallRequest, request_id)
+    if request_record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Install request not found.")
+
+    user = db.get(User, payload.approved_by)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approver not found.")
+
+    return review_install_request(
+        db,
+        request_record=request_record,
+        approved_by=user.id,
+        status=payload.status,
     )

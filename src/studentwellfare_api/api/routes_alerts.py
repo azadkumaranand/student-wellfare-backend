@@ -33,13 +33,18 @@ def create_alert_endpoint(
     )
 
 
+# Called by both parent dashboard and student device — open to anyone who knows
+# the student_id (which only the parent or the paired device should have).
 @router.get("/students/{student_id}/alerts", response_model=list[AlertResponse])
 def list_student_alerts(
-    student: Student = Depends(get_owned_student),
+    student_id: str,
     db: Session = Depends(get_db),
 ) -> list[AlertResponse]:
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
     return db.scalars(
-        select(Alert).where(Alert.student_id == student.id).order_by(desc(Alert.created_at)).limit(50)
+        select(Alert).where(Alert.student_id == student_id).order_by(desc(Alert.created_at)).limit(50)
     ).all()
 
 

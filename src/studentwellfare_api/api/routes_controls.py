@@ -152,14 +152,18 @@ def patch_website_rule(
     )
 
 
+# Called by both parent dashboard and student device.
 @router.get("/students/{student_id}/extra-time-requests", response_model=list[ExtraTimeRequestResponse])
 def list_extra_time_requests(
-    student: Student = Depends(get_owned_student),
+    student_id: str,
     db: Session = Depends(get_db),
 ) -> list[ExtraTimeRequest]:
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
     return db.scalars(
         select(ExtraTimeRequest)
-        .where(ExtraTimeRequest.student_id == student.id)
+        .where(ExtraTimeRequest.student_id == student_id)
         .order_by(desc(ExtraTimeRequest.created_at))
         .limit(50)
     ).all()
@@ -242,14 +246,18 @@ def reject_extra_time_request(
     )
 
 
+# Called by both parent dashboard and student device.
 @router.get("/students/{student_id}/install-requests", response_model=list[InstallRequestResponse])
 def list_install_requests(
-    student: Student = Depends(get_owned_student),
+    student_id: str,
     db: Session = Depends(get_db),
 ) -> list[InstallRequest]:
+    student = db.get(Student, student_id)
+    if student is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
     return db.scalars(
         select(InstallRequest)
-        .where(InstallRequest.student_id == student.id)
+        .where(InstallRequest.student_id == student_id)
         .order_by(desc(InstallRequest.created_at))
         .limit(50)
     ).all()

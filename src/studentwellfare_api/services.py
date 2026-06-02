@@ -74,11 +74,17 @@ def generate_pairing_code() -> str:
     return f"SAFE-{secrets.randbelow(9000) + 1000}"
 
 
+ACCESS_TOKEN_TTL = timedelta(days=30)
+
+
 def issue_user_session(db: Session, *, user: User) -> AuthLoginResponse:
+    access_token = secrets.token_urlsafe(32)
     session_record = UserSession(
         id=f"sess_{uuid.uuid4().hex[:16]}",
         user_id=user.id,
         refresh_token=secrets.token_urlsafe(32),
+        access_token=access_token,
+        access_token_expires_at=now_utc() + ACCESS_TOKEN_TTL,
         is_revoked=False,
         created_at=now_utc(),
     )
@@ -86,7 +92,7 @@ def issue_user_session(db: Session, *, user: User) -> AuthLoginResponse:
     db.commit()
 
     return AuthLoginResponse(
-        access_token=secrets.token_urlsafe(32),
+        access_token=access_token,
         refresh_token=session_record.refresh_token,
         user_id=user.id,
         role=user.role,
@@ -106,10 +112,13 @@ def refresh_user_session(db: Session, *, refresh_token: str) -> AuthLoginRespons
         return None
 
     session_record.is_revoked = True
+    access_token = secrets.token_urlsafe(32)
     replacement = UserSession(
         id=f"sess_{uuid.uuid4().hex[:16]}",
         user_id=user.id,
         refresh_token=secrets.token_urlsafe(32),
+        access_token=access_token,
+        access_token_expires_at=now_utc() + ACCESS_TOKEN_TTL,
         is_revoked=False,
         created_at=now_utc(),
     )
@@ -117,7 +126,7 @@ def refresh_user_session(db: Session, *, refresh_token: str) -> AuthLoginRespons
     db.commit()
 
     return AuthLoginResponse(
-        access_token=secrets.token_urlsafe(32),
+        access_token=access_token,
         refresh_token=replacement.refresh_token,
         user_id=user.id,
         role=user.role,
@@ -167,8 +176,13 @@ def get_student_summary(student: Student) -> StudentSummary:
     )
 
 
-def list_students_with_status(db: Session) -> list[StudentListItemResponse]:
-    students = db.scalars(select(Student).order_by(Student.created_at.asc())).all()
+def list_students_with_status(
+    db: Session, *, parent_id: str | None = None
+) -> list[StudentListItemResponse]:
+    stmt = select(Student).order_by(Student.created_at.asc())
+    if parent_id:
+        stmt = stmt.where(Student.parent_id == parent_id)
+    students = db.scalars(stmt).all()
     items: list[StudentListItemResponse] = []
     for student in students:
         latest_device = db.scalar(
@@ -212,8 +226,7 @@ def create_student_record(db: Session, *, payload: StudentCreateRequest) -> Stud
 def update_student_record(db: Session, *, student: Student, payload: StudentUpdateRequest) -> Student:
     if payload.name is not None:
         student.name = payload.name.strip()
-    if payload.parent_id is not None:
-        student.parent_id = payload.parent_id
+    # parent_id is intentionally ignored — ownership cannot be reassigned via PATCH.
     if payload.organization_id is not None:
         student.organization_id = payload.organization_id.strip()
     if payload.status is not None:
@@ -808,3 +821,14 @@ def ensure_schema_compatibility() -> None:
     if "parent_pin_hash" not in user_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE users ADD COLUMN parent_pin_hash VARCHAR(128)"))
+
+    if "user_sessions" in inspector.get_table_names():
+        session_columns = {column["name"] for column in inspector.get_columns("user_sessions")}
+        timestamp_type = "TIMESTAMP" if engine.dialect.name == "postgresql" else "DATETIME"
+        with engine.begin() as connection:
+            if "access_token" not in session_columns:
+                connection.execute(text("ALTER TABLE user_sessions ADD COLUMN access_token VARCHAR(255)"))
+            if "access_token_expires_at" not in session_columns:
+                connection.execute(
+                    text(f"ALTER TABLE user_sessions ADD COLUMN access_token_expires_at {timestamp_type}")
+                )

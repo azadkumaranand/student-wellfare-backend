@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from studentwellfare_api.api.deps import get_current_user
 from studentwellfare_api.database import get_db
 from studentwellfare_api.models import User
 from studentwellfare_api.schemas import (
@@ -90,39 +91,23 @@ def logout(payload: AuthLogoutRequest, db: Session = Depends(get_db)) -> dict[st
 @router.post("/verify-parent-pin", response_model=ParentPinVerifyResponse)
 def verify_parent_pin_endpoint(
     payload: ParentPinVerifyRequest,
-    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ParentPinVerifyResponse:
-    from studentwellfare_api.models import Student
-    
-    user = None
-    if payload.user_id:
-        user = db.get(User, payload.user_id)
-    elif payload.student_id:
-        student = db.get(Student, payload.student_id)
-        if student:
-            user = student.parent
-            
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-    
-    return ParentPinVerifyResponse(valid=verify_parent_pin(payload.pin, user.parent_pin_hash))
+    return ParentPinVerifyResponse(valid=verify_parent_pin(payload.pin, current_user.parent_pin_hash))
 
 
 @router.post("/set-parent-pin", response_model=ParentPinUpdateResponse)
 def set_parent_pin_endpoint(
     payload: ParentPinUpdateRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ParentPinUpdateResponse:
-    user = db.get(User, payload.user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
-
     if not payload.new_pin.isdigit():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="PIN must contain only digits.",
         )
 
-    user.parent_pin_hash = hash_parent_pin(payload.new_pin)
+    current_user.parent_pin_hash = hash_parent_pin(payload.new_pin)
     db.commit()
     return ParentPinUpdateResponse(ok=True)

@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from studentwellfare_api.api.deps import get_current_user
 from studentwellfare_api.database import get_db
-from studentwellfare_api.models import AppRule, Device, PairingCode, Student, WebsiteRule
+from studentwellfare_api.models import AppRule, Device, PairingCode, Student, User, WebsiteRule
 from studentwellfare_api.schemas import (
     DeviceRegisterRequest,
     DeviceResponse,
@@ -31,10 +32,11 @@ router = APIRouter(tags=["pairing"])
 @router.post("/pairing/create-code", response_model=PairingCodeResponse)
 def create_pairing_code(
     payload: PairingCodeCreateRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> PairingCodeResponse:
     student = db.get(Student, payload.student_id)
-    if student is None:
+    if student is None or student.parent_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
 
     pairing_code = PairingCode(

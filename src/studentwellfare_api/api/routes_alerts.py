@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
+from studentwellfare_api.api.deps import get_current_user, get_owned_student
 from studentwellfare_api.database import get_db
-from studentwellfare_api.models import Alert, Student
+from studentwellfare_api.models import Alert, Student, User
 from studentwellfare_api.schemas import AlertCreateRequest, AlertResponse
 from studentwellfare_api.services import create_alert, mark_alert_read
 
@@ -33,20 +34,27 @@ def create_alert_endpoint(
 
 
 @router.get("/students/{student_id}/alerts", response_model=list[AlertResponse])
-def list_student_alerts(student_id: str, db: Session = Depends(get_db)) -> list[AlertResponse]:
-    student = db.get(Student, student_id)
-    if student is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found.")
-
+def list_student_alerts(
+    student: Student = Depends(get_owned_student),
+    db: Session = Depends(get_db),
+) -> list[AlertResponse]:
     return db.scalars(
-        select(Alert).where(Alert.student_id == student_id).order_by(desc(Alert.created_at)).limit(50)
+        select(Alert).where(Alert.student_id == student.id).order_by(desc(Alert.created_at)).limit(50)
     ).all()
 
 
 @router.patch("/alerts/{alert_id}/read", response_model=AlertResponse)
-def mark_alert_read_endpoint(alert_id: int, db: Session = Depends(get_db)) -> AlertResponse:
+def mark_alert_read_endpoint(
+    alert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AlertResponse:
     alert = db.get(Alert, alert_id)
     if alert is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found.")
+
+    student = db.get(Student, alert.student_id)
+    if student is None or student.parent_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found.")
 
     if alert.read_at is not None:

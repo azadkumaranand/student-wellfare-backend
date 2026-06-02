@@ -241,7 +241,7 @@ class StudentSummary(BaseModel):
 
 class StudentCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
-    parent_id: str
+    parent_id: str | None = None  # ignored — server fills from auth token
     organization_id: str = Field(default="org_internal", min_length=2, max_length=50)
     status: str = Field(default="ACTIVE", min_length=3, max_length=20)
 

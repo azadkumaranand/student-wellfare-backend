@@ -61,11 +61,13 @@ def verify_pairing_code(
     payload: PairingVerifyRequest,
     db: Session = Depends(get_db),
 ) -> PairingVerifyResponse:
-    pairing = db.get(PairingCode, payload.pairing_code.strip().upper())
+    normalized = "".join(payload.pairing_code.split()).upper()
+    print(f"[pairing/verify] received={payload.pairing_code!r} normalized={normalized!r}")
+    pairing = db.get(PairingCode, normalized)
     if pairing is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Pairing code is invalid. Please request a new one from your parent or admin.",
+            detail=f"Pairing code '{normalized}' was not found. Make sure the parent app has generated it and you typed it exactly as shown.",
         )
     if not pairing.is_active:
         raise HTTPException(

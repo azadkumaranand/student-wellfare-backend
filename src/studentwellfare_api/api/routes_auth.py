@@ -88,12 +88,30 @@ def logout(payload: AuthLogoutRequest, db: Session = Depends(get_db)) -> dict[st
     return {"ok": revoke_user_session(db, refresh_token=payload.refresh_token)}
 
 
+# Open endpoint: called both from the parent app (after login) and from the
+# student device's "parent PIN" gate, which has no parent auth token.
+# Resolves the target user via user_id when provided, otherwise via the paired
+# student. The PIN itself is the secret; knowing a student_id only lets you
+# probe one specific parent's PIN.
 @router.post("/verify-parent-pin", response_model=ParentPinVerifyResponse)
 def verify_parent_pin_endpoint(
     payload: ParentPinVerifyRequest,
-    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> ParentPinVerifyResponse:
-    return ParentPinVerifyResponse(valid=verify_parent_pin(payload.pin, current_user.parent_pin_hash))
+    from studentwellfare_api.models import Student
+
+    user: User | None = None
+    if payload.user_id:
+        user = db.get(User, payload.user_id)
+    elif payload.student_id:
+        student = db.get(Student, payload.student_id)
+        if student is not None:
+            user = student.parent
+
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    return ParentPinVerifyResponse(valid=verify_parent_pin(payload.pin, user.parent_pin_hash))
 
 
 @router.post("/set-parent-pin", response_model=ParentPinUpdateResponse)
